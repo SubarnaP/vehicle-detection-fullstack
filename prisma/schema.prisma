@@ -1,0 +1,25 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  username  String   @unique
+  password  String
+  createdAt DateTime @default(now())
+}
+
+model VehicleDetection {
+  id          String   @id @default(cuid())
+  plateNumber String
+  imageUrl    String?
+  detectedAt  DateTime @default(now())
+  source      String   @default("camera")
+  metadata    Json     @default("{}")
+  createdAt   DateTime @default(now())
+}
