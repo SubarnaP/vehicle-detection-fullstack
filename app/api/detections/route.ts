@@ -5,6 +5,10 @@ import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 import { Prisma } from "@prisma/client";
 
+/* -------------------------------------------------------
+   Helpers
+------------------------------------------------------- */
+
 // Ensure uploads directory exists
 async function ensureUploadDir() {
   const uploadDir = path.join(process.cwd(), "public/uploads");
@@ -36,22 +40,43 @@ async function saveBase64Image(base64: string): Promise<string> {
   return `/uploads/${filename}`;
 }
 
-// POST: Create new detection
+// ✅ Convert unknown metadata into Prisma-safe JSON
+function toPrismaJson(
+  value: unknown
+): Prisma.InputJsonValue | undefined {
+  if (value === undefined || value === null) return undefined;
+
+  try {
+    // Ensures value is JSON-serializable
+    return JSON.parse(JSON.stringify(value));
+  } catch {
+    return undefined;
+  }
+}
+
+/* -------------------------------------------------------
+   POST: Create detection
+------------------------------------------------------- */
 export async function POST(request: NextRequest) {
   try {
     const auth = validateAuth(request);
     if (!auth) {
-      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+      return NextResponse.json(
+        { message: "Unauthorized" },
+        { status: 401 }
+      );
     }
 
     let plateNumber = "";
     let imageUrl: string | null = null;
-    let metadata: unknown = undefined;
+    let metadata: Prisma.InputJsonValue | undefined;
 
     const contentType = request.headers.get("content-type") ?? "";
 
+    // Multipart (form-data)
     if (contentType.includes("multipart/form-data")) {
       const formData = await request.formData();
+
       plateNumber = String(formData.get("plateNumber") ?? "");
 
       const imageFile = formData.get("image");
@@ -62,22 +87,23 @@ export async function POST(request: NextRequest) {
       const metadataStr = formData.get("metadata");
       if (typeof metadataStr === "string") {
         try {
-          metadata = JSON.parse(metadataStr);
+          metadata = toPrismaJson(JSON.parse(metadataStr));
         } catch {
           metadata = undefined;
         }
       }
-    } else {
+    }
+    // JSON body
+    else {
       const body = await request.json();
-      plateNumber = body.plateNumber;
+
+      plateNumber = body.plateNumber ?? "";
 
       if (typeof body.image === "string") {
         imageUrl = await saveBase64Image(body.image);
       }
 
-      if (body.metadata !== undefined) {
-        metadata = body.metadata;
-      }
+      metadata = toPrismaJson(body.metadata);
     }
 
     if (!plateNumber) {
@@ -87,18 +113,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 🔴 THIS IS THE IMPORTANT FIX (EXPLICIT CAST)
     const detection = await prisma.vehicleDetection.create({
       data: {
         plateNumber,
         imageUrl,
         source: "camera",
-        metadata: metadata as Prisma.InputJsonValue | undefined,
+        metadata,
       },
     });
 
     return NextResponse.json(
-      { message: "Detection saved successfully", detection },
+      {
+        message: "Detection saved successfully",
+        detection,
+      },
       { status: 201 }
     );
   } catch (error) {
@@ -110,15 +138,21 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// GET: Retrieve detections
+/* -------------------------------------------------------
+   GET: Fetch detections
+------------------------------------------------------- */
 export async function GET(request: NextRequest) {
   try {
     const auth = validateAuth(request);
     if (!auth) {
-      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+      return NextResponse.json(
+        { message: "Unauthorized" },
+        { status: 401 }
+      );
     }
 
     const { searchParams } = new URL(request.url);
+
     const plateNumber = searchParams.get("plateNumber");
     const startDate = searchParams.get("startDate");
     const endDate = searchParams.get("endDate");
@@ -128,7 +162,10 @@ export async function GET(request: NextRequest) {
     const where: Prisma.VehicleDetectionWhereInput = {};
 
     if (plateNumber) {
-      where.plateNumber = { contains: plateNumber, mode: "insensitive" };
+      where.plateNumber = {
+        contains: plateNumber,
+        mode: "insensitive",
+      };
     }
 
     if (startDate || endDate) {
