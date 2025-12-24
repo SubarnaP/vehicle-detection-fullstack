@@ -34,6 +34,7 @@ import prisma from "@/lib/db";
 import { validateAuth } from "@/lib/auth";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
+import { Prisma } from "@prisma/client";
 
 // Ensure uploads directory exists
 async function ensureUploadDir() {
@@ -89,7 +90,7 @@ export async function POST(request: NextRequest) {
 
     let plateNumber: string;
     let imageUrl: string | null = null;
-    let metadata: Record<string, unknown> = {};
+    let metadata: Prisma.InputJsonValue = {};
 
     const contentType = request.headers.get("content-type") || "";
 
@@ -106,7 +107,7 @@ export async function POST(request: NextRequest) {
       const metadataStr = formData.get("metadata") as string;
       if (metadataStr) {
         try {
-          metadata = JSON.parse(metadataStr);
+          metadata = JSON.parse(metadataStr) as Prisma.InputJsonValue;
         } catch {
           metadata = {};
         }
@@ -120,7 +121,7 @@ export async function POST(request: NextRequest) {
         imageUrl = await saveBase64Image(body.image);
       }
       
-      metadata = body.metadata || {};
+      metadata = (body.metadata || {}) as Prisma.InputJsonValue;
     }
 
     // Validate required fields
