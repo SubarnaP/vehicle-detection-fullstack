@@ -90,7 +90,8 @@ export async function POST(request: NextRequest) {
 
     let plateNumber: string;
     let imageUrl: string | null = null;
-    let metadata: Prisma.InputJsonValue = {};
+    // keep metadata flexible locally, cast when sending to Prisma
+    let metadata: unknown = {};
 
     const contentType = request.headers.get("content-type") || "";
 
@@ -107,7 +108,7 @@ export async function POST(request: NextRequest) {
       const metadataStr = formData.get("metadata") as string;
       if (metadataStr) {
         try {
-          metadata = JSON.parse(metadataStr) as Prisma.InputJsonValue;
+          metadata = JSON.parse(metadataStr);
         } catch {
           metadata = {};
         }
@@ -121,7 +122,7 @@ export async function POST(request: NextRequest) {
         imageUrl = await saveBase64Image(body.image);
       }
       
-      metadata = (body.metadata || {}) as Prisma.InputJsonValue;
+      metadata = body.metadata ?? {};
     }
 
     // Validate required fields
@@ -138,7 +139,7 @@ export async function POST(request: NextRequest) {
         plateNumber,
         imageUrl,
         source: "camera",
-        metadata,
+        metadata: metadata as Prisma.InputJsonValue,
       },
     });
 
@@ -175,7 +176,7 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get("limit") || "20");
 
     // Build where clause
-    const where: Record<string, unknown> = {};
+    const where: Prisma.VehicleDetectionWhereInput = {};
     
     if (plateNumber) {
       where.plateNumber = { contains: plateNumber, mode: "insensitive" };
