@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
 
     let plateNumber = "";
     let imageUrl: string | null = null;
-    let metadata: Prisma.InputJsonValue | null = null;
+    let metadata: unknown = undefined;
 
     const contentType = request.headers.get("content-type") ?? "";
 
@@ -62,9 +62,9 @@ export async function POST(request: NextRequest) {
       const metadataStr = formData.get("metadata");
       if (typeof metadataStr === "string") {
         try {
-          metadata = JSON.parse(metadataStr) as Prisma.InputJsonValue;
+          metadata = JSON.parse(metadataStr);
         } catch {
-          metadata = null;
+          metadata = undefined;
         }
       }
     } else {
@@ -76,9 +76,7 @@ export async function POST(request: NextRequest) {
       }
 
       if (body.metadata !== undefined) {
-        metadata = JSON.parse(
-          JSON.stringify(body.metadata)
-        ) as Prisma.InputJsonValue;
+        metadata = body.metadata;
       }
     }
 
@@ -89,12 +87,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // 🔴 THIS IS THE IMPORTANT FIX (EXPLICIT CAST)
     const detection = await prisma.vehicleDetection.create({
       data: {
         plateNumber,
         imageUrl,
         source: "camera",
-        metadata: metadata ?? undefined,
+        metadata: metadata as Prisma.InputJsonValue | undefined,
       },
     });
 
