@@ -43,14 +43,14 @@ async function saveBase64Image(base64: string): Promise<string> {
 // ✅ Convert unknown metadata into Prisma-safe JSON
 function toPrismaJson(
   value: unknown
-): Prisma.InputJsonValue | undefined {
-  if (value === undefined || value === null) return undefined;
+): Prisma.InputJsonValue | Prisma.JsonNull | undefined {
+  if (value === undefined || value === null) return Prisma.JsonNull;
 
   try {
     // Ensures value is JSON-serializable
-    return JSON.parse(JSON.stringify(value));
+    return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
   } catch {
-    return undefined;
+    return Prisma.JsonNull;
   }
 }
 
@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
 
     let plateNumber = "";
     let imageUrl: string | null = null;
-    let metadata: Prisma.InputJsonValue | undefined;
+    let metadata: Prisma.InputJsonValue | Prisma.JsonNull | undefined = undefined;
 
     const contentType = request.headers.get("content-type") ?? "";
 
@@ -113,13 +113,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Build the data object conditionally
+    const detectionData: Prisma.VehicleDetectionCreateInput = {
+      plateNumber,
+      imageUrl,
+      source: "camera",
+      ...(metadata !== undefined && { metadata }),
+    };
+
     const detection = await prisma.vehicleDetection.create({
-      data: {
-        plateNumber,
-        imageUrl,
-        source: "camera",
-        metadata,
-      },
+      data: detectionData,
     });
 
     return NextResponse.json(
