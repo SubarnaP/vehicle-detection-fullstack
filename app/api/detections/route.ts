@@ -135,7 +135,7 @@ export async function POST(request: NextRequest) {
 
     // Prepare metadata value for Prisma and save to database
     const metadataValue: Prisma.InputJsonValue | undefined =
-      metadata === null ? undefined : (metadata as Prisma.InputJsonValue);
+      metadata === null ? undefined : JSON.parse(JSON.stringify(metadata));
     const detection = await prisma.vehicleDetection.create({
       data: {
         plateNumber,
