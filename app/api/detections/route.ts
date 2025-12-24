@@ -40,20 +40,6 @@ async function saveBase64Image(base64: string): Promise<string> {
   return `/uploads/${filename}`;
 }
 
-// ✅ Convert unknown metadata into Prisma-safe JSON
-function toPrismaJson(
-  value: unknown
-): Prisma.InputJsonValue | Prisma.JsonNull | undefined {
-  if (value === undefined || value === null) return Prisma.JsonNull;
-
-  try {
-    // Ensures value is JSON-serializable
-    return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
-  } catch {
-    return Prisma.JsonNull;
-  }
-}
-
 /* -------------------------------------------------------
    POST: Create detection
 ------------------------------------------------------- */
@@ -69,7 +55,7 @@ export async function POST(request: NextRequest) {
 
     let plateNumber = "";
     let imageUrl: string | null = null;
-    let metadata: Prisma.InputJsonValue | Prisma.JsonNull | undefined = undefined;
+    let metadataValue: any = undefined;
 
     const contentType = request.headers.get("content-type") ?? "";
 
@@ -87,9 +73,9 @@ export async function POST(request: NextRequest) {
       const metadataStr = formData.get("metadata");
       if (typeof metadataStr === "string") {
         try {
-          metadata = toPrismaJson(JSON.parse(metadataStr));
+          metadataValue = JSON.parse(metadataStr);
         } catch {
-          metadata = undefined;
+          metadataValue = undefined;
         }
       }
     }
@@ -103,7 +89,7 @@ export async function POST(request: NextRequest) {
         imageUrl = await saveBase64Image(body.image);
       }
 
-      metadata = toPrismaJson(body.metadata);
+      metadataValue = body.metadata;
     }
 
     if (!plateNumber) {
@@ -113,13 +99,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Build the data object conditionally
-    const detectionData: Prisma.VehicleDetectionCreateInput = {
+    // Build the data object - only include metadata if it exists
+    const detectionData: any = {
       plateNumber,
       imageUrl,
       source: "camera",
-      ...(metadata !== undefined && { metadata }),
     };
+
+    if (metadataValue !== undefined && metadataValue !== null) {
+      detectionData.metadata = metadataValue;
+    }
 
     const detection = await prisma.vehicleDetection.create({
       data: detectionData,
